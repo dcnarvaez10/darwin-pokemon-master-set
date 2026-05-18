@@ -16,7 +16,6 @@
 
   --text: #f8fafc;
   --muted: #aab7d0;
-  --faint: #74829c;
 
   --input: rgba(12, 24, 45, 0.96);
   --input-border: rgba(255, 255, 255, 0.16);
@@ -52,79 +51,41 @@ body {
   color: var(--text);
 }
 
-/* HEADER */
+/* ONE-LINE HEADER */
 
 .topbar {
   position: sticky;
   top: 0;
   z-index: 20;
   display: grid;
-  grid-template-areas:
-    "title title title title title title"
-    "subtitle subtitle subtitle subtitle subtitle subtitle"
-    "search owner set missing sort save";
   grid-template-columns:
-    minmax(260px, 2fr)
-    minmax(140px, 0.8fr)
-    minmax(160px, 0.9fr)
-    minmax(180px, 1fr)
-    minmax(170px, 1fr)
-    minmax(130px, auto);
-  gap: 14px;
+    250px
+    minmax(220px, 1fr)
+    130px
+    150px
+    170px
+    160px
+    120px;
+  gap: 12px;
   align-items: center;
-  padding: 16px 24px;
+  padding: 14px 20px;
   background: var(--topbar);
   border-bottom: 1px solid var(--topbar-border);
   backdrop-filter: blur(12px);
 }
 
 .topbar h1 {
-  grid-area: title;
   margin: 0;
-  font-size: 22px;
-  line-height: 1.1;
+  font-size: 18px;
+  line-height: 1;
   letter-spacing: -0.02em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar::after {
-  grid-area: subtitle;
-  content: "Black Bolt tracker";
-  display: block;
-  margin-top: -8px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-#searchInput {
-  grid-area: search;
-}
-
-#ownerFilter {
-  grid-area: owner;
-}
-
-#setFilter {
-  grid-area: set;
-}
-
-#missingFilter {
-  grid-area: missing;
-}
-
-#sortSelect {
-  grid-area: sort;
-}
-
-#saveButton {
-  grid-area: save;
-}
-
-.topbar input,
-.topbar select,
-#saveButton {
-  min-width: 0;
+  content: none;
 }
 
 /* FORM ELEMENTS */
@@ -132,13 +93,13 @@ body {
 input,
 select {
   width: 100%;
-  height: 42px;
+  height: 38px;
   border: 1px solid var(--input-border);
-  border-radius: 12px;
-  padding: 0 14px;
+  border-radius: 11px;
+  padding: 0 12px;
   background: var(--input);
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
 }
 
@@ -158,12 +119,13 @@ select:disabled {
 }
 
 button {
-  min-height: 40px;
+  min-height: 38px;
   border: 0;
-  border-radius: 12px;
-  padding: 9px 14px;
+  border-radius: 11px;
+  padding: 8px 12px;
   background: var(--button);
   color: white;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -179,7 +141,7 @@ button:disabled {
 }
 
 #saveButton {
-  height: 42px;
+  height: 38px;
   white-space: nowrap;
 }
 
@@ -188,20 +150,20 @@ button:disabled {
 main {
   width: min(1120px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 28px 0 72px;
+  padding: 24px 0 72px;
 }
 
 #statusMessage {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
-  margin: 0 0 18px;
+  min-height: 32px;
+  margin: 0 0 16px;
   padding: 8px 12px;
   border: 1px solid var(--panel-border);
   border-radius: 999px;
   background: rgba(13, 24, 45, 0.62);
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -366,34 +328,33 @@ main {
 
 @media (max-width: 1180px) {
   .topbar {
-    grid-template-areas:
-      "title title"
-      "subtitle subtitle"
-      "search search"
-      "owner set"
-      "missing sort"
-      "save save";
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns:
+      220px
+      minmax(180px, 1fr)
+      110px
+      130px
+      150px
+      140px
+      110px;
+    gap: 10px;
+    padding: 12px 16px;
   }
 
+  .topbar h1 {
+    font-size: 16px;
+  }
+
+  input,
+  select,
   #saveButton {
-    width: 100%;
+    height: 36px;
+    font-size: 12px;
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .topbar {
-    grid-template-areas:
-      "title"
-      "subtitle"
-      "search"
-      "owner"
-      "set"
-      "missing"
-      "sort"
-      "save";
     grid-template-columns: 1fr;
-    padding: 16px;
   }
 
   .topbar h1 {
@@ -409,10 +370,6 @@ main {
   .card-item {
     padding: 16px 14px 20px;
     border-radius: 16px;
-  }
-
-  .card-title-row {
-    align-items: flex-start;
   }
 
   .card-title-row h2 {
