@@ -130,17 +130,18 @@ function hydrateFilters() {
   if (app.missingFilter) {
     app.missingFilter.innerHTML = `
       <option value="All">All Cards</option>
-      <option value="Owned">Owned Cards</option>
-      <option value="Missing">Missing Cards</option>
+      ${VARIANT_ORDER.map(
+        variant =>
+          `<option value="${escapeHtml(variant)}">Missing ${escapeHtml(variant)}</option>`
+      ).join("")}
     `;
   }
 
   if (app.sortSelect) {
     app.sortSelect.innerHTML = `
-      <option value="number">Sort by Card #</option>
-      <option value="alpha">Sort A → Z</option>
-      <option value="missing">Missing First</option>
-      <option value="owned">Owned First</option>
+      <option value="numberAsc">Card Number ↑</option>
+      <option value="numberDesc">Card Number ↓</option>
+      <option value="alpha">A → Z</option>
     `;
   }
 }
@@ -181,8 +182,8 @@ function renderCards() {
   if (!app.results) return;
 
   const query = normalizeText(app.searchInput?.value || "");
-  const ownershipFilter = app.missingFilter?.value || "All";
-  const sortMode = app.sortSelect?.value || "number";
+  const missingVariantFilter = app.missingFilter?.value || "All";
+  const sortMode = app.sortSelect?.value || "numberAsc";
 
   let cards = groupedCards.slice();
 
@@ -197,17 +198,23 @@ function renderCards() {
   }
 
   cards = cards.filter(card => {
-    const stats = getCardStats(card);
-
-    if (ownershipFilter === "Owned") {
-      return stats.ownedCount > 0;
+    if (missingVariantFilter === "All") {
+      return true;
     }
 
-    if (ownershipFilter === "Missing") {
-      return stats.missingCount > 0;
+    const variantData = card.variants[missingVariantFilter];
+
+    if (!variantData || !variantData.exists) {
+      return false;
     }
 
-    return true;
+    const owned = getCurrentOwnedValue(
+      card.cardNumber,
+      missingVariantFilter,
+      variantData.owned
+    );
+
+    return owned === false;
   });
 
   cards.sort((a, b) => {
@@ -215,22 +222,20 @@ function renderCards() {
       return a.pokemon.localeCompare(b.pokemon);
     }
 
-    if (sortMode === "missing") {
-      return getCardStats(b).missingCount - getCardStats(a).missingCount;
-    }
-
-    if (sortMode === "owned") {
-      return getCardStats(b).ownedCount - getCardStats(a).ownedCount;
+    if (sortMode === "numberDesc") {
+      return getCardNumberSortValue(b.cardNumber) - getCardNumberSortValue(a.cardNumber);
     }
 
     return getCardNumberSortValue(a.cardNumber) - getCardNumberSortValue(b.cardNumber);
   });
 
   const totalVariants = visibleRows.filter(row => toBoolean(row.Exists)).length;
+
   const ownedVariants = visibleRows.filter(row => {
     if (!toBoolean(row.Exists)) return false;
 
     const key = makeUpdateKey(row.CardNumber, row.Variant);
+
     if (pendingUpdates.has(key)) {
       return pendingUpdates.get(key).owned === true;
     }
@@ -238,7 +243,12 @@ function renderCards() {
     return toBoolean(row.Owned);
   }).length;
 
-  setStatus(`${cards.length} cards (${ownedVariants} of ${totalVariants} variants owned)`);
+  const statusPrefix =
+    missingVariantFilter === "All"
+      ? `${cards.length} cards`
+      : `${cards.length} cards missing ${missingVariantFilter}`;
+
+  setStatus(`${statusPrefix} (${ownedVariants} of ${totalVariants} variants owned)`);
 
   if (cards.length === 0) {
     app.results.innerHTML = `
@@ -258,7 +268,10 @@ function renderCards() {
 
 function renderCard(card) {
   const stats = getCardStats(card);
-  const percent = stats.totalCount === 0 ? 0 : Math.round((stats.ownedCount / stats.totalCount) * 100);
+  const percent =
+    stats.totalCount === 0
+      ? 0
+      : Math.round((stats.ownedCount / stats.totalCount) * 100);
 
   return `
     <article class="card-item">
