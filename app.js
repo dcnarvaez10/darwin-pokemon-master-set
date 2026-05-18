@@ -19,116 +19,61 @@ const VARIANT_ORDER = [
 
 let allRows = [];
 let visibleRows = [];
+let groupedCards = [];
 let pendingUpdates = new Map();
 
+const app = {
+  searchInput: null,
+  ownerFilter: null,
+  setFilter: null,
+  missingFilter: null,
+  sortSelect: null,
+  statusMessage: null,
+  results: null,
+  saveButton: null
+};
+
 document.addEventListener("DOMContentLoaded", () => {
-  buildAppShell();
-  loadCards();
+  cacheElements();
+  bindEvents();
+  loadData();
 });
 
-function buildAppShell() {
-  document.body.innerHTML = `
-    <header class="site-header">
-      <div>
-        <h1>Darwin Pokémon Master Set</h1>
-        <p>Black Bolt master set tracker</p>
-      </div>
-    </header>
+function cacheElements() {
+  app.searchInput = document.getElementById("searchInput");
+  app.ownerFilter = document.getElementById("ownerFilter");
+  app.setFilter = document.getElementById("setFilter");
+  app.missingFilter = document.getElementById("missingFilter");
+  app.sortSelect = document.getElementById("sortSelect");
+  app.statusMessage = document.getElementById("statusMessage");
+  app.results = document.getElementById("results");
 
-    <main class="page-shell">
-      <section class="summary-panel">
-        <div>
-          <h2>${SET_FILTER}</h2>
-          <p id="status-text">Loading cards...</p>
-        </div>
-
-        <div class="summary-actions">
-          <button id="refresh-button" type="button">Refresh</button>
-          <button id="save-button" type="button" disabled>Save Changes</button>
-        </div>
-      </section>
-
-      <section class="progress-panel">
-        <div class="progress-label">
-          <span id="owned-count">0 owned</span>
-          <span id="progress-percent">0%</span>
-        </div>
-        <div class="progress-bar">
-          <div id="progress-fill"></div>
-        </div>
-      </section>
-
-      <section class="filter-panel">
-        <label for="search-input">Search</label>
-        <input
-          id="search-input"
-          type="search"
-          placeholder="Search card number or Pokémon..."
-        />
-
-        <label for="variant-filter">Variant</label>
-        <select id="variant-filter">
-          <option value="all">All variants</option>
-          ${VARIANT_ORDER.map(
-            variant => `<option value="${escapeHtml(variant)}">${escapeHtml(variant)}</option>`
-          ).join("")}
-        </select>
-
-        <label for="owned-filter">Ownership</label>
-        <select id="owned-filter">
-          <option value="all">All cards</option>
-          <option value="owned">Owned only</option>
-          <option value="missing">Missing only</option>
-        </select>
-      </section>
-
-      <section class="table-panel">
-        <div class="table-scroll">
-          <table id="cards-table">
-            <thead>
-              <tr>
-                <th>Card #</th>
-                <th>Pokémon</th>
-                ${VARIANT_ORDER.map(
-                  variant => `<th>${escapeHtml(variant)}</th>`
-                ).join("")}
-              </tr>
-            </thead>
-            <tbody id="cards-body">
-              <tr>
-                <td colspan="${VARIANT_ORDER.length + 2}">Loading...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-  `;
-
-  document
-    .getElementById("refresh-button")
-    .addEventListener("click", loadCards);
-
-  document
-    .getElementById("save-button")
-    .addEventListener("click", savePendingUpdates);
-
-  document
-    .getElementById("search-input")
-    .addEventListener("input", renderCards);
-
-  document
-    .getElementById("variant-filter")
-    .addEventListener("change", renderCards);
-
-  document
-    .getElementById("owned-filter")
-    .addEventListener("change", renderCards);
+  createSaveButton();
 }
 
-async function loadCards() {
+function createSaveButton() {
+  app.saveButton = document.createElement("button");
+  app.saveButton.id = "saveButton";
+  app.saveButton.textContent = "Save Changes";
+  app.saveButton.disabled = true;
+  app.saveButton.addEventListener("click", savePendingUpdates);
+
+  const header = document.querySelector(".topbar");
+  if (header) {
+    header.appendChild(app.saveButton);
+  }
+}
+
+function bindEvents() {
+  app.searchInput?.addEventListener("input", renderCards);
+  app.ownerFilter?.addEventListener("change", renderCards);
+  app.setFilter?.addEventListener("change", renderCards);
+  app.missingFilter?.addEventListener("change", renderCards);
+  app.sortSelect?.addEventListener("change", renderCards);
+}
+
+async function loadData() {
   setStatus("Loading cards...");
-  setSaveButtonState();
 
   try {
     const response = await fetch(`${API_URL}?cacheBust=${Date.now()}`);
@@ -148,140 +93,239 @@ async function loadCards() {
     });
 
     pendingUpdates.clear();
+    groupedCards = buildGroupedCards(visibleRows);
 
+    hydrateFilters();
     renderCards();
-    setStatus(`${visibleRows.length} variant rows loaded.`);
   } catch (error) {
     console.error(error);
     setStatus(`Error loading cards: ${error.message}`);
-
-    const cardsBody = document.getElementById("cards-body");
-    cardsBody.innerHTML = `
-      <tr>
-        <td colspan="${VARIANT_ORDER.length + 2}">
-          Could not load card data. Check the Apps Script deployment URL.
-        </td>
-      </tr>
+    app.results.innerHTML = `
+      <div class="empty-state">
+        Could not load cards. Check the Apps Script Web App URL.
+      </div>
     `;
   }
 
-  setSaveButtonState();
+  updateSaveButton();
+}
+
+function hydrateFilters() {
+  if (app.ownerFilter) {
+    app.ownerFilter.innerHTML = `
+      <option value="${OWNER_FILTER}">${OWNER_FILTER}</option>
+    `;
+    app.ownerFilter.value = OWNER_FILTER;
+    app.ownerFilter.disabled = true;
+  }
+
+  if (app.setFilter) {
+    app.setFilter.innerHTML = `
+      <option value="${SET_FILTER}">${SET_FILTER}</option>
+    `;
+    app.setFilter.value = SET_FILTER;
+    app.setFilter.disabled = true;
+  }
+
+  if (app.missingFilter) {
+    app.missingFilter.innerHTML = `
+      <option value="All">All Cards</option>
+      <option value="Owned">Owned Cards</option>
+      <option value="Missing">Missing Cards</option>
+    `;
+  }
+
+  if (app.sortSelect) {
+    app.sortSelect.innerHTML = `
+      <option value="number">Sort by Card #</option>
+      <option value="alpha">Sort A → Z</option>
+      <option value="missing">Missing First</option>
+      <option value="owned">Owned First</option>
+    `;
+  }
+}
+
+function buildGroupedCards(rows) {
+  const map = new Map();
+
+  rows.forEach(row => {
+    const cardNumber = String(row.CardNumber || "").trim();
+    const pokemon = String(row.Pokemon || "").trim();
+    const variant = String(row.Variant || "").trim();
+
+    if (!cardNumber || !pokemon || !variant) return;
+
+    const key = `${normalizeCard(cardNumber)}::${normalizeText(pokemon)}`;
+
+    if (!map.has(key)) {
+      map.set(key, {
+        owner: row.Owner,
+        set: row.Set,
+        cardNumber,
+        pokemon,
+        variants: {}
+      });
+    }
+
+    map.get(key).variants[variant] = {
+      variant,
+      owned: toBoolean(row.Owned),
+      exists: toBoolean(row.Exists)
+    };
+  });
+
+  return Array.from(map.values());
 }
 
 function renderCards() {
-  const cardsBody = document.getElementById("cards-body");
+  if (!app.results) return;
 
-  const searchValue = normalizeText(
-    document.getElementById("search-input").value
-  );
+  const query = normalizeText(app.searchInput?.value || "");
+  const ownershipFilter = app.missingFilter?.value || "All";
+  const sortMode = app.sortSelect?.value || "number";
 
-  const variantFilter = document.getElementById("variant-filter").value;
-  const ownedFilter = document.getElementById("owned-filter").value;
+  let cards = groupedCards.slice();
 
-  const groupedCards = groupRowsByCard(visibleRows);
-
-  let cards = Object.values(groupedCards);
-
-  if (searchValue) {
+  if (query) {
     cards = cards.filter(card => {
       return (
-        normalizeText(card.cardNumber).includes(searchValue) ||
-        normalizeText(card.pokemon).includes(searchValue)
+        normalizeText(card.pokemon).includes(query) ||
+        normalizeText(card.cardNumber).includes(query) ||
+        normalizeText(card.set).includes(query)
       );
     });
   }
 
   cards = cards.filter(card => {
-    if (variantFilter === "all" && ownedFilter === "all") return true;
+    const stats = getCardStats(card);
 
-    return VARIANT_ORDER.some(variant => {
-      const variantData = card.variants[variant];
+    if (ownershipFilter === "Owned") {
+      return stats.ownedCount > 0;
+    }
 
-      if (!variantData || !toBoolean(variantData.Exists)) {
-        return false;
-      }
+    if (ownershipFilter === "Missing") {
+      return stats.missingCount > 0;
+    }
 
-      if (variantFilter !== "all" && variant !== variantFilter) {
-        return false;
-      }
-
-      const owned = getCurrentOwnedValue(card.cardNumber, variant, variantData);
-
-      if (ownedFilter === "owned") {
-        return owned === true;
-      }
-
-      if (ownedFilter === "missing") {
-        return owned === false;
-      }
-
-      return true;
-    });
+    return true;
   });
 
+  cards.sort((a, b) => {
+    if (sortMode === "alpha") {
+      return a.pokemon.localeCompare(b.pokemon);
+    }
+
+    if (sortMode === "missing") {
+      return getCardStats(b).missingCount - getCardStats(a).missingCount;
+    }
+
+    if (sortMode === "owned") {
+      return getCardStats(b).ownedCount - getCardStats(a).ownedCount;
+    }
+
+    return getCardNumberSortValue(a.cardNumber) - getCardNumberSortValue(b.cardNumber);
+  });
+
+  const totalVariants = visibleRows.filter(row => toBoolean(row.Exists)).length;
+  const ownedVariants = visibleRows.filter(row => {
+    if (!toBoolean(row.Exists)) return false;
+
+    const key = makeUpdateKey(row.CardNumber, row.Variant);
+    if (pendingUpdates.has(key)) {
+      return pendingUpdates.get(key).owned === true;
+    }
+
+    return toBoolean(row.Owned);
+  }).length;
+
+  setStatus(`${cards.length} cards (${ownedVariants} of ${totalVariants} variants owned)`);
+
   if (cards.length === 0) {
-    cardsBody.innerHTML = `
-      <tr>
-        <td colspan="${VARIANT_ORDER.length + 2}">
-          No matching cards found.
-        </td>
-      </tr>
+    app.results.innerHTML = `
+      <div class="empty-state">
+        No cards match your filters.
+      </div>
     `;
-    updateProgress();
     return;
   }
 
-  cardsBody.innerHTML = cards
-    .map(card => {
-      return `
-        <tr>
-          <td class="card-number">${escapeHtml(card.cardNumber)}</td>
-          <td class="pokemon-name">${escapeHtml(card.pokemon)}</td>
-          ${VARIANT_ORDER.map(variant => renderVariantCell(card, variant)).join("")}
-        </tr>
-      `;
-    })
-    .join("");
+  app.results.innerHTML = cards.map(renderCard).join("");
 
-  cardsBody.querySelectorAll("input[type='checkbox']").forEach(checkbox => {
-    checkbox.addEventListener("change", handleCheckboxChange);
+  app.results.querySelectorAll("button.variant-pill").forEach(button => {
+    button.addEventListener("click", handleVariantClick);
   });
-
-  updateProgress();
 }
 
-function renderVariantCell(card, variant) {
-  const variantData = card.variants[variant];
-
-  if (!variantData || !toBoolean(variantData.Exists)) {
-    return `<td class="variant-cell unavailable"></td>`;
-  }
-
-  const checked = getCurrentOwnedValue(card.cardNumber, variant, variantData);
-  const updateKey = makeUpdateKey(card.cardNumber, variant);
-  const changedClass = pendingUpdates.has(updateKey) ? "changed" : "";
+function renderCard(card) {
+  const stats = getCardStats(card);
+  const percent = stats.totalCount === 0 ? 0 : Math.round((stats.ownedCount / stats.totalCount) * 100);
 
   return `
-    <td class="variant-cell available ${changedClass}">
-      <input
-        type="checkbox"
-        data-card-number="${escapeHtml(card.cardNumber)}"
-        data-pokemon="${escapeHtml(card.pokemon)}"
-        data-variant="${escapeHtml(variant)}"
-        ${checked ? "checked" : ""}
-        aria-label="${escapeHtml(card.pokemon)} ${escapeHtml(variant)}"
-      />
-    </td>
+    <article class="card-item">
+      <div class="card-main">
+        <div class="card-title-row">
+          <h2>${escapeHtml(card.pokemon)}</h2>
+          <span class="card-progress">${stats.ownedCount}/${stats.totalCount}</span>
+        </div>
+
+        <p class="card-meta">
+          #${escapeHtml(card.cardNumber)} • ${escapeHtml(card.set)} • ${escapeHtml(card.owner)}
+        </p>
+
+        <div class="variant-list">
+          ${VARIANT_ORDER.map(variant => renderVariantPill(card, variant)).join("")}
+        </div>
+      </div>
+
+      <div class="mini-progress" aria-label="${percent}% complete">
+        <div class="mini-progress-fill" style="width: ${percent}%"></div>
+      </div>
+    </article>
   `;
 }
 
-function handleCheckboxChange(event) {
-  const checkbox = event.target;
+function renderVariantPill(card, variant) {
+  const data = card.variants[variant];
 
-  const cardNumber = checkbox.dataset.cardNumber;
-  const pokemon = checkbox.dataset.pokemon;
-  const variant = checkbox.dataset.variant;
-  const owned = checkbox.checked;
+  if (!data || !data.exists) {
+    return "";
+  }
+
+  const currentOwned = getCurrentOwnedValue(card.cardNumber, variant, data.owned);
+  const key = makeUpdateKey(card.cardNumber, variant);
+  const changed = pendingUpdates.has(key);
+
+  const classes = [
+    "variant-pill",
+    currentOwned ? "owned" : "missing",
+    changed ? "changed" : "",
+    getVariantClass(variant)
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return `
+    <button
+      type="button"
+      class="${classes}"
+      data-card-number="${escapeHtml(card.cardNumber)}"
+      data-pokemon="${escapeHtml(card.pokemon)}"
+      data-variant="${escapeHtml(variant)}"
+      data-owned="${currentOwned ? "true" : "false"}"
+    >
+      ${escapeHtml(variant)}
+    </button>
+  `;
+}
+
+function handleVariantClick(event) {
+  const button = event.currentTarget;
+
+  const cardNumber = button.dataset.cardNumber;
+  const pokemon = button.dataset.pokemon;
+  const variant = button.dataset.variant;
+  const currentOwned = button.dataset.owned === "true";
+  const nextOwned = !currentOwned;
 
   const originalRow = visibleRows.find(row => {
     return (
@@ -293,33 +337,32 @@ function handleCheckboxChange(event) {
   if (!originalRow) return;
 
   const originalOwned = toBoolean(originalRow.Owned);
-  const updateKey = makeUpdateKey(cardNumber, variant);
+  const key = makeUpdateKey(cardNumber, variant);
 
-  if (owned === originalOwned) {
-    pendingUpdates.delete(updateKey);
+  if (nextOwned === originalOwned) {
+    pendingUpdates.delete(key);
   } else {
-    pendingUpdates.set(updateKey, {
+    pendingUpdates.set(key, {
       owner: OWNER_FILTER,
       setName: SET_FILTER,
       cardNumber,
       pokemon,
       variant,
-      owned
+      owned: nextOwned
     });
   }
 
-  setSaveButtonState();
+  updateSaveButton();
   renderCards();
 }
 
 async function savePendingUpdates() {
   if (pendingUpdates.size === 0) return;
 
-  const saveButton = document.getElementById("save-button");
   const updates = Array.from(pendingUpdates.values());
 
-  saveButton.disabled = true;
-  saveButton.textContent = "Saving...";
+  app.saveButton.disabled = true;
+  app.saveButton.textContent = "Saving...";
   setStatus(`Saving ${updates.length} change(s)...`);
 
   try {
@@ -332,107 +375,67 @@ async function savePendingUpdates() {
     const payload = await response.json();
 
     if (!payload.success) {
-      throw new Error(payload.message || "Some updates failed.");
+      throw new Error(payload.message || "Save failed.");
     }
 
     pendingUpdates.clear();
-
     setStatus(payload.message || "Changes saved.");
-    await loadCards();
+
+    await loadData();
   } catch (error) {
     console.error(error);
     setStatus(`Save failed: ${error.message}`);
   }
 
-  saveButton.textContent = "Save Changes";
-  setSaveButtonState();
+  app.saveButton.textContent = "Save Changes";
+  updateSaveButton();
 }
 
-function groupRowsByCard(rows) {
-  const grouped = {};
-
-  rows.forEach(row => {
-    const cardNumber = String(row.CardNumber || "").trim();
-    const pokemon = String(row.Pokemon || "").trim();
-    const variant = String(row.Variant || "").trim();
-
-    if (!cardNumber || !pokemon || !variant) return;
-
-    const key = normalizeCard(cardNumber);
-
-    if (!grouped[key]) {
-      grouped[key] = {
-        cardNumber,
-        pokemon,
-        variants: {}
-      };
-    }
-
-    grouped[key].variants[variant] = row;
-  });
-
-  return grouped;
-}
-
-function updateProgress() {
-  const ownedCountEl = document.getElementById("owned-count");
-  const progressPercentEl = document.getElementById("progress-percent");
-  const progressFillEl = document.getElementById("progress-fill");
-
+function getCardStats(card) {
+  let totalCount = 0;
   let ownedCount = 0;
-  let possibleCount = 0;
 
-  visibleRows.forEach(row => {
-    if (!toBoolean(row.Exists)) return;
+  VARIANT_ORDER.forEach(variant => {
+    const data = card.variants[variant];
 
-    possibleCount++;
+    if (!data || !data.exists) return;
 
-    const currentOwned = getCurrentOwnedValue(
-      row.CardNumber,
-      row.Variant,
-      row
-    );
+    totalCount++;
 
-    if (currentOwned) {
-      ownedCount++;
-    }
+    const owned = getCurrentOwnedValue(card.cardNumber, variant, data.owned);
+    if (owned) ownedCount++;
   });
 
-  const percent =
-    possibleCount === 0 ? 0 : Math.round((ownedCount / possibleCount) * 100);
-
-  ownedCountEl.textContent = `${ownedCount} of ${possibleCount} owned`;
-  progressPercentEl.textContent = `${percent}%`;
-  progressFillEl.style.width = `${percent}%`;
+  return {
+    totalCount,
+    ownedCount,
+    missingCount: totalCount - ownedCount
+  };
 }
 
-function getCurrentOwnedValue(cardNumber, variant, row) {
-  const updateKey = makeUpdateKey(cardNumber, variant);
+function getCurrentOwnedValue(cardNumber, variant, fallbackOwned) {
+  const key = makeUpdateKey(cardNumber, variant);
 
-  if (pendingUpdates.has(updateKey)) {
-    return pendingUpdates.get(updateKey).owned === true;
+  if (pendingUpdates.has(key)) {
+    return pendingUpdates.get(key).owned === true;
   }
 
-  return toBoolean(row.Owned);
+  return fallbackOwned === true;
 }
 
-function setSaveButtonState() {
-  const saveButton = document.getElementById("save-button");
-
-  if (!saveButton) return;
+function updateSaveButton() {
+  if (!app.saveButton) return;
 
   const count = pendingUpdates.size;
 
-  saveButton.disabled = count === 0;
-  saveButton.textContent =
+  app.saveButton.disabled = count === 0;
+  app.saveButton.textContent =
     count === 0 ? "Save Changes" : `Save ${count} Change${count === 1 ? "" : "s"}`;
 }
 
 function setStatus(message) {
-  const statusText = document.getElementById("status-text");
-
-  if (statusText) {
-    statusText.textContent = message;
+  if (app.statusMessage) {
+    app.statusMessage.textContent = message;
   }
 }
 
@@ -471,6 +474,28 @@ function toBoolean(value) {
   const str = String(value || "").toLowerCase().trim();
 
   return str === "true" || str === "yes" || str === "1" || str === "checked";
+}
+
+function getCardNumberSortValue(cardNumber) {
+  const firstPart = String(cardNumber || "").split("/")[0];
+  const number = parseInt(firstPart, 10);
+
+  return Number.isNaN(number) ? 999999 : number;
+}
+
+function getVariantClass(variant) {
+  const normalized = normalizeText(variant);
+
+  if (normalized.includes("master")) return "master";
+  if (normalized.includes("poke")) return "poke";
+  if (normalized.includes("rev")) return "reverse";
+  if (normalized.includes("holo")) return "holo";
+  if (normalized === "ir") return "rare";
+  if (normalized === "ur") return "rare";
+  if (normalized === "sir") return "rare";
+  if (normalized === "bwr") return "rare";
+
+  return "normal";
 }
 
 function escapeHtml(value) {
