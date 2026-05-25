@@ -100,11 +100,14 @@ async function loadData() {
   } catch (error) {
     console.error(error);
     setStatus(`Error loading cards: ${error.message}`);
-    app.results.innerHTML = `
-      <div class="empty-state">
-        Could not load cards. Check the Apps Script Web App URL.
-      </div>
-    `;
+
+    if (app.results) {
+      app.results.innerHTML = `
+        <div class="empty-state">
+          Could not load cards. Check the Apps Script Web App URL.
+        </div>
+      `;
+    }
   }
 
   updateSaveButton();
@@ -153,6 +156,7 @@ function buildGroupedCards(rows) {
     const cardNumber = String(row.CardNumber || "").trim();
     const pokemon = String(row.Pokemon || "").trim();
     const variant = String(row.Variant || "").trim();
+    const imageUrl = getImageUrl(row);
 
     if (!cardNumber || !pokemon || !variant) return;
 
@@ -164,11 +168,18 @@ function buildGroupedCards(rows) {
         set: row.Set,
         cardNumber,
         pokemon,
+        imageUrl,
         variants: {}
       });
     }
 
-    map.get(key).variants[variant] = {
+    const card = map.get(key);
+
+    if (!card.imageUrl && imageUrl) {
+      card.imageUrl = imageUrl;
+    }
+
+    card.variants[variant] = {
       variant,
       owned: toBoolean(row.Owned),
       exists: toBoolean(row.Exists)
@@ -273,8 +284,24 @@ function renderCard(card) {
       ? 0
       : Math.round((stats.ownedCount / stats.totalCount) * 100);
 
+  const imageHtml = card.imageUrl
+    ? `
+      <div class="card-image-wrap">
+        <img
+          class="card-image"
+          src="${escapeHtml(card.imageUrl)}"
+          alt="${escapeHtml(card.pokemon)} card image"
+          loading="lazy"
+          onerror="this.closest('.card-image-wrap').remove();"
+        />
+      </div>
+    `
+    : "";
+
   return `
     <article class="card-item">
+      ${imageHtml}
+
       <div class="card-main">
         <div class="card-title-row">
           <h2>${escapeHtml(card.pokemon)}</h2>
@@ -509,6 +536,18 @@ function getVariantClass(variant) {
   if (normalized === "bwr") return "rare";
 
   return "normal";
+}
+
+function getImageUrl(row) {
+  return String(
+    row.ImageURL ||
+      row.ImageUrl ||
+      row["Image URL"] ||
+      row.imageUrl ||
+      row.CardImage ||
+      row.CardImageURL ||
+      ""
+  ).trim();
 }
 
 function escapeHtml(value) {
